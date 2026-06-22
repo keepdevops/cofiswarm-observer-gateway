@@ -36,10 +36,9 @@ func main() {
 
 	h := hub.New()
 
-	b, err := bus.New(egress, ingress, filter)
-	if err != nil {
-		log.Fatalf("bus: %v", err)
-	}
+	// Retry the initial bus dial with capped backoff so the gateway survives starting
+	// before the bridge is up (rather than crash-looping); the dashboard still serves.
+	b := dialBus(egress, ingress, filter)
 	defer b.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -50,6 +49,23 @@ func main() {
 	log.Printf("observer-gateway listening on %s (events<-%s, commands->%q, cmd-prefix=%q)",
 		*addr, egress, ingress, cmdPrefix)
 	log.Fatal(http.ListenAndServe(*addr, srv.Handler()))
+}
+
+// dialBus connects to the bridge, retrying with capped backoff so the gateway tolerates a
+// bridge that isn't up yet instead of crash-looping. Returns once connected.
+func dialBus(egress, ingress, filter string) *bus.Bus {
+	backoff := time.Second
+	for {
+		b, err := bus.New(egress, ingress, filter)
+		if err == nil {
+			return b
+		}
+		log.Printf("bus: %v (retry in %s)", err, backoff)
+		time.Sleep(backoff)
+		if backoff < 30*time.Second {
+			backoff *= 2
+		}
+	}
 }
 
 // consumeForever reads egress events into the hub, reconnecting with capped backoff so a

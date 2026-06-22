@@ -14,8 +14,13 @@ browser ⇄ ws://:8820/ws ⇄ gateway ⇄ SUB egress :5557 (events) / PUB ingres
   (`COFISWARM_ZMQ_ADDR`, e.g. `tcp://127.0.0.1:5556`; unset = read-only). Commands are
   guarded by `COFISWARM_CMD_PREFIX` (default `swarm.observer.`) so the browser can't inject
   arbitrary topics.
-- **Dashboard** — a tiny embedded panel at `/` connects to `/ws`, renders live events, and
-  sends commands. `/healthz` reports client count + command capability.
+- **Dashboard** — a configurable widget panel at `/` (served with `/dashboard.js`) connects
+  to `/ws` and renders live telemetry. Widgets are **draggable** (reorder), **resizable**,
+  and **add/removable**, with the layout persisted to `localStorage`. Built-in widget kinds:
+  online-component count, events/sec, slot-pressure and KV-pressure line charts, events-by-
+  topic bars, and a live event feed — all bound to bus topics. Dependency-free (canvas
+  charts, no CDN) so the gateway stays a single offline-safe binary. `/healthz` reports
+  client count + command capability.
 
 WebSocket `Origin` allowlist: `COFISWARM_WS_ORIGINS` (comma-separated; empty = same-origin).
 
