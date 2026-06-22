@@ -6,88 +6,58 @@
 <title>Cofiswarm Observer Panel</title>
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9;
-    --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950; --err: #f85149;
-    --space-1: 4px; --space-2: 8px; --space-3: 16px; --radius: 6px;
-    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2230; --border: #30363d;
+    --text: #c9d1d9; --muted: #8b949e; --accent: #58a6ff; --accent-2: #3fb950;
+    --warn: #d29922; --err: #f85149;
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+    --radius: 8px; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
+  * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); }
-  header { padding: var(--space-3); border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: var(--space-3); }
-  h1 { font-size: 16px; margin: 0; }
-  #status { font-size: 13px; color: var(--muted); }
-  #status.up { color: var(--ok); } #status.down { color: var(--err); }
-  main { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); padding: var(--space-3); }
-  section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: var(--space-3); min-height: 200px; }
-  h2 { font-size: 13px; color: var(--muted); margin: 0 0 var(--space-2); text-transform: uppercase; }
-  .event { font-size: 12px; padding: var(--space-1) 0; border-bottom: 1px solid var(--border); }
-  .topic { color: var(--accent); }
-  form { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
-  input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: var(--space-2); font-family: var(--mono); }
-  button { background: var(--accent); color: var(--bg); border: 0; border-radius: var(--radius);
-    padding: var(--space-2) var(--space-3); cursor: pointer; font-family: var(--mono); }
+  header { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+  h1 { font-size: 15px; margin: 0; }
+  #status { font-size: 12px; color: var(--muted); }
+  #status.up { color: var(--accent-2); } #status.down { color: var(--err); }
+  .spacer { flex: 1; }
+  select, button { background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: var(--space-2) var(--space-3); font-family: var(--mono);
+    font-size: 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4); padding: var(--space-4); align-items: start; }
+  .widget { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    display: flex; flex-direction: column; overflow: hidden; resize: both; min-width: 240px;
+    min-height: 140px; }
+  .widget.drag-over { border-color: var(--accent); }
+  .w-head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border); cursor: grab; user-select: none; }
+  .w-grip { color: var(--muted); letter-spacing: -2px; }
+  .w-title { font-size: 12px; font-weight: 600; flex: 1; }
+  .w-close { color: var(--muted); background: none; border: 0; padding: 0 var(--space-2); font-size: 14px; }
+  .w-close:hover { color: var(--err); }
+  .w-body { flex: 1; padding: var(--space-3); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; min-height: 100px; }
+  .stat-num { font-size: 40px; font-weight: 700; color: var(--text); line-height: 1; }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: var(--space-2); }
+  canvas { width: 100%; height: 100%; }
+  .feed { width: 100%; height: 100%; overflow-y: auto; font-size: 11px; align-self: stretch; }
+  .feed div { padding: 2px 0; border-bottom: 1px solid var(--border); }
+  .feed .topic { color: var(--accent); }
 </style>
 </head>
 <body>
 <header>
   <h1>Cofiswarm Observer Panel</h1>
   <span id="status" class="down">connecting…</span>
+  <span class="spacer"></span>
+  <select id="add-widget" title="Add widget">
+    <option value="">+ Add widget…</option>
+  </select>
+  <button id="reset">Reset layout</button>
 </header>
-<main>
-  <section>
-    <h2>Live bus events</h2>
-    <div id="events"></div>
-  </section>
-  <section>
-    <h2>Command (publish to bus)</h2>
-    <form id="cmd">
-      <input id="topic" value="swarm.observer.hello" />
-      <button type="submit">Send</button>
-    </form>
-    <div id="acks"></div>
-  </section>
-</main>
-<script>
-  const status = document.getElementById("status");
-  const events = document.getElementById("events");
-  const acks = document.getElementById("acks");
-  let ws;
-
-  function connect() {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.onopen = () => { status.textContent = "connected"; status.className = "up"; };
-    ws.onclose = () => {
-      status.textContent = "disconnected — retrying"; status.className = "down";
-      setTimeout(connect, 1000); // reconnect with a fixed backoff
-    };
-    ws.onmessage = (e) => {
-      let msg; try { msg = JSON.parse(e.data); } catch { return; }
-      if (msg.type === "ack" || msg.type === "error") {
-        const el = document.createElement("div");
-        el.className = "event"; el.style.color = msg.type === "error" ? "var(--err)" : "var(--ok)";
-        el.textContent = `${msg.type}: ${msg.detail}`;
-        acks.prepend(el);
-        return;
-      }
-      const el = document.createElement("div");
-      el.className = "event";
-      el.innerHTML = `<span class="topic">${msg.topic ?? "?"}</span> ${JSON.stringify(msg.payload ?? {})}`;
-      events.prepend(el);
-      while (events.children.length > 100) events.lastChild.remove();
-    };
-  }
-
-  document.getElementById("cmd").addEventListener("submit", (e) => {
-    e.preventDefault();
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const topic = document.getElementById("topic").value.trim();
-    ws.send(JSON.stringify({ type: "publish", topic, payload: { from: "observer-panel" } }));
-  });
-
-  connect();
-</script>
+<div id="grid"></div>
+<script src="/dashboard.js"></script>
 </body>
 </html>

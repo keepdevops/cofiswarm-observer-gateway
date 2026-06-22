@@ -20,6 +20,9 @@ import (
 //go:embed index.html
 var indexHTML []byte
 
+//go:embed dashboard.js
+var dashboardJS []byte
+
 // Publisher is the command sink: the WS read loop republishes browser commands through it.
 type Publisher interface {
 	Publish(topic string, payload map[string]any) error
@@ -47,6 +50,10 @@ func (s *Server) Handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(indexHTML)
+	})
+	mux.HandleFunc("/dashboard.js", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		_, _ = w.Write(dashboardJS)
 	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
