@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cofiswarm Observer Panel</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9;
+    --muted: #8b949e; --accent: #58a6ff; --ok: #3fb950; --err: #f85149;
+    --space-1: 4px; --space-2: 8px; --space-3: 16px; --radius: 6px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); }
+  header { padding: var(--space-3); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: var(--space-3); }
+  h1 { font-size: 16px; margin: 0; }
+  #status { font-size: 13px; color: var(--muted); }
+  #status.up { color: var(--ok); } #status.down { color: var(--err); }
+  main { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); padding: var(--space-3); }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: var(--space-3); min-height: 200px; }
+  h2 { font-size: 13px; color: var(--muted); margin: 0 0 var(--space-2); text-transform: uppercase; }
+  .event { font-size: 12px; padding: var(--space-1) 0; border-bottom: 1px solid var(--border); }
+  .topic { color: var(--accent); }
+  form { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+  input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: var(--space-2); font-family: var(--mono); }
+  button { background: var(--accent); color: var(--bg); border: 0; border-radius: var(--radius);
+    padding: var(--space-2) var(--space-3); cursor: pointer; font-family: var(--mono); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cofiswarm Observer Panel</h1>
+  <span id="status" class="down">connecting…</span>
+</header>
+<main>
+  <section>
+    <h2>Live bus events</h2>
+    <div id="events"></div>
+  </section>
+  <section>
+    <h2>Command (publish to bus)</h2>
+    <form id="cmd">
+      <input id="topic" value="swarm.observer.hello" />
+      <button type="submit">Send</button>
+    </form>
+    <div id="acks"></div>
+  </section>
+</main>
+<script>
+  const status = document.getElementById("status");
+  const events = document.getElementById("events");
+  const acks = document.getElementById("acks");
+  let ws;
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onopen = () => { status.textContent = "connected"; status.className = "up"; };
+    ws.onclose = () => {
+      status.textContent = "disconnected — retrying"; status.className = "down";
+      setTimeout(connect, 1000); // reconnect with a fixed backoff
+    };
+    ws.onmessage = (e) => {
+      let msg; try { msg = JSON.parse(e.data); } catch { return; }
+      if (msg.type === "ack" || msg.type === "error") {
+        const el = document.createElement("div");
+        el.className = "event"; el.style.color = msg.type === "error" ? "var(--err)" : "var(--ok)";
+        el.textContent = `${msg.type}: ${msg.detail}`;
+        acks.prepend(el);
+        return;
+      }
+      const el = document.createElement("div");
+      el.className = "event";
+      el.innerHTML = `<span class="topic">${msg.topic ?? "?"}</span> ${JSON.stringify(msg.payload ?? {})}`;
+      events.prepend(el);
+      while (events.children.length > 100) events.lastChild.remove();
+    };
+  }
+
+  document.getElementById("cmd").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const topic = document.getElementById("topic").value.trim();
+    ws.send(JSON.stringify({ type: "publish", topic, payload: { from: "observer-panel" } }));
+  });
+
+  connect();
+</script>
+</body>
+</html>
