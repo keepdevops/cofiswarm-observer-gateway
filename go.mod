@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/go-zeromq/zmq4 v0.17.0
+	github.com/keepdevops/cofiswarm-observer-sdk v1.3.0
 )
 
 require (

@@ -22,6 +22,7 @@ import (
 	"github.com/keepdevops/cofiswarm-observer-gateway/internal/bus"
 	"github.com/keepdevops/cofiswarm-observer-gateway/internal/hub"
 	"github.com/keepdevops/cofiswarm-observer-gateway/internal/wsapi"
+	"github.com/keepdevops/cofiswarm-observer-sdk/pkg/buspresence"
 )
 
 func main() {
@@ -44,6 +45,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go consumeForever(ctx, b, h)
+
+	// Broker-free presence: appear in the observer roster (re-announces on hello; the observer
+	// TTL-reaps us on exit since log.Fatal precludes a graceful goodbye). No-op if unset.
+	_ = buspresence.StartPresence(os.Getenv("COFISWARM_BRIDGE_URL"), "observer-gateway", map[string]any{"name": "observer-gateway"})
 
 	srv := wsapi.New(h, b, cmdPrefix, origins)
 	log.Printf("observer-gateway listening on %s (events<-%s, commands->%q, cmd-prefix=%q)",
